@@ -58,3 +58,15 @@ npm install
 npm run compile
 # Press F5 in VS Code to launch the Extension Development Host
 ```
+
+## VSIX Installation
+
+1. Build the extension package:
+   ```bash
+   npm run compile
+   npx vsce package
+   ```
+2. In Visual Studio Code, open the Command Palette (`⌘+Shift+P` / `Ctrl+Shift+P`).
+3. Run `Extensions: Install from VSIX...`.
+4. Select the generated `.vsix` file from your project folder.
+5. Reload VS Code if prompted.
