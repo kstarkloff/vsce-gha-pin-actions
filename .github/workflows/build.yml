@@ -20,11 +20,14 @@ jobs:
       - name: Install packages
         run: npm install
 
+      - name: Compile TypeScript
+        run: npm run compile
+
       - name: Install vsce
         run: npm install -g @vscode/vsce
 
       - name: Build vsix
-        run: vsce package --no-git-tag-version --out gha-pin-actions.vsix
+        run: vsce package --no-git-tag-version --allow-missing-repository --out gha-pin-actions.vsix
 
       - name: Upload vsix artifact
         uses: actions/upload-artifact@v6
