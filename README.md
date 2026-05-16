@@ -4,28 +4,38 @@ Pins GitHub Actions in your workflow files to immutable full-length commit SHAs 
 
 ## Features
 
-### 🔒 Pin Actions (Command Palette / Title Bar Button)
-- **"Pin Actions to SHA: Current File"** — pins all unpinned actions in the active workflow file.
-- **"Pin Actions to SHA: All Workflow Files"** — pins every `*.yml`/`*.yaml` under `.github/workflows/`.
+### ⚠️ Inline Warnings
 
-Both commands are accessible via the Command Palette (`Ctrl+Shift+P`) and the lock icon (🔒) in the editor title bar when a workflow file is open.
+Any `uses:` line that is not pinned to a full SHA shows a yellow warning squiggle. The **Problems** panel lists all unpinned actions in the workspace.
 
-### ⚠️ Inline Warnings (Diagnostics)
-Any `uses:` line that is not pinned to a full SHA shows a yellow warning squiggle. Hover over it to see the message, or open the **Problems** panel.
+### 🔧 Quick Fix
+
+Click the lightbulb or press `⌘.` (`Ctrl+.`) on a warning squiggle to get two options:
+
+- **Pin to commit SHA** — resolves the current tag (e.g. `v4`) to its full SHA and replaces it in place.
+- **Pin to version…** — opens a list of all available tags for the action. Pick any version and the corresponding SHA is inserted.
+
+### 🔒 Pin All Actions in File
+
+Pins every unpinned action in the current workflow file at once. Available via:
+
+- The **lock icon** in the editor title bar (visible when a workflow file is open)
+- Right-click context menu → **Pin Actions to SHA: Current File**
+- Command Palette (`⌘+Shift+P`) → **Pin Actions to SHA: Current File**
 
 ### 🔍 Hover Info
-Hover over any `uses:` value to see:
-- Whether it is already pinned.
-- The resolved full SHA (fetched live from GitHub API).
+
+Hover over any `uses:` value to see the resolved full SHA fetched live from the GitHub API.
 
 ## Authentication
+
 The extension uses VS Code's built-in GitHub authentication — no PAT configuration needed. You will be prompted to sign in on first use.
 
 ## Settings
 
 | Setting | Default | Description |
 |---|---|---|
-| `gha-pin-actions.addVersionComment` | `true` | Add `# v4` comment next to the SHA for readability |
+| `gha-pin-actions.addVersionComment` | `true` | Adds a `# v4` comment next to the SHA for readability |
 
 ## Example
 
