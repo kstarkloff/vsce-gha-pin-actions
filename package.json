@@ -35,6 +35,13 @@
           "when": "resourcePath =~ /\\.github[\\\\/]workflows[\\\\/].*\\.ya?ml$/",
           "group": "navigation"
         }
+      ],
+      "editor/context": [
+        {
+          "command": "gha-pin-actions.pinFile",
+          "when": "resourcePath =~ /\\.github[\\\\/]workflows[\\\\/].*\\.ya?ml$/",
+          "group": "1_modification@100"
+        }
       ]
     },
     "configuration": {

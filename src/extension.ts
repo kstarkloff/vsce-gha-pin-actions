@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { parseWorkflow, UsesMatch } from "./parser";
-import { resolveShaCached, isSha, getToken, clearCache, clearToken } from "./github";
+import { resolveShaCached, isSha, getToken, clearCache, clearToken, fetchTags } from "./github";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -220,7 +220,7 @@ async function ensureToken(): Promise<void> {
 // ── Activation ────────────────────────────────────────────────────────────────
 
 export function activate(context: vscode.ExtensionContext): void {
-  // Diagnostics on open / change
+  // Diagnostics on open / change / tab switch
   context.subscriptions.push(
     vscode.workspace.onDidOpenTextDocument(refreshDiagnostics),
     vscode.workspace.onDidChangeTextDocument((e) =>
@@ -228,11 +228,15 @@ export function activate(context: vscode.ExtensionContext): void {
     ),
     vscode.workspace.onDidCloseTextDocument((doc) =>
       diagnosticCollection.delete(doc.uri)
-    )
+    ),
+    vscode.window.onDidChangeActiveTextEditor((editor) => {
+      if (editor) refreshDiagnostics(editor.document);
+    })
   );
 
-  // Run on already-open editors
+  // Run on already-open editors (textDocuments + visibleTextEditors for reliability)
   vscode.workspace.textDocuments.forEach(refreshDiagnostics);
+  vscode.window.visibleTextEditors.forEach((e) => refreshDiagnostics(e.document));
 
   // Clear cache when auth changes
   context.subscriptions.push(
@@ -247,8 +251,151 @@ export function activate(context: vscode.ExtensionContext): void {
   // Hover provider (only for YAML)
   context.subscriptions.push(
     vscode.languages.registerHoverProvider(
-      { language: "yaml", scheme: "file" },
+      { pattern: "**/.github/workflows/*.{yml,yaml}", scheme: "file" },
       { provideHover }
+    )
+  );
+
+  // QuickFix provider
+  context.subscriptions.push(
+    vscode.languages.registerCodeActionsProvider(
+      { pattern: "**/.github/workflows/*.{yml,yaml}", scheme: "file" },
+      {
+        provideCodeActions(doc, range, _context) {
+          if (!isWorkflowFile(doc.uri)) return [];
+          const matches = parseWorkflow(doc.getText());
+          const match = matches.find(
+            (m) => m.line === range.start.line && !(isSha(m.ref) && m.ref.length === 40)
+          );
+          if (!match) return [];
+
+          const pin = new vscode.CodeAction("Pin to commit SHA", vscode.CodeActionKind.QuickFix);
+          pin.command = {
+            command: "gha-pin-actions.pinSingleAction",
+            title: "Pin to commit SHA",
+            arguments: [doc.uri, match.line],
+          };
+          pin.isPreferred = true;
+
+          const pick = new vscode.CodeAction("Pin to version…", vscode.CodeActionKind.QuickFix);
+          pick.command = {
+            command: "gha-pin-actions.pickTagAndPin",
+            title: "Pin to version…",
+            arguments: [doc.uri, match.line],
+          };
+
+          return [pin, pick];
+        },
+      },
+      { providedCodeActionKinds: [vscode.CodeActionKind.QuickFix] }
+    )
+  );
+
+  // Command: pin single action (used by QuickFix)
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "gha-pin-actions.pinSingleAction",
+      async (uri: vscode.Uri, line: number) => {
+        const doc = await vscode.workspace.openTextDocument(uri);
+        const matches = parseWorkflow(doc.getText());
+        const match = matches.find((m) => m.line === line);
+        if (!match || (isSha(match.ref) && match.ref.length === 40)) return;
+
+        await ensureToken();
+
+        let resolved;
+        try {
+          resolved = await resolveShaCached({ owner: match.owner, repo: match.repo, ref: match.ref });
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          vscode.window.showWarningMessage(`Could not resolve SHA: ${msg}`);
+          return;
+        }
+
+        const newRef =
+          `${match.nameWithOwner}@${resolved.sha}` +
+          (shouldAddComment() && resolved.tagName ? ` # ${resolved.tagName}` : "");
+
+        const editor = vscode.window.visibleTextEditors.find(
+          (e) => e.document.uri.toString() === uri.toString()
+        );
+        const lineLength = doc.lineAt(match.line).text.length;
+        const replaceRange = new vscode.Range(match.line, match.valueStart, match.line, lineLength);
+
+        if (editor) {
+          await editor.edit((eb) => eb.replace(replaceRange, newRef));
+        } else {
+          const we = new vscode.WorkspaceEdit();
+          we.replace(uri, replaceRange, newRef);
+          await vscode.workspace.applyEdit(we);
+        }
+
+        await refreshDiagnostics(doc);
+      }
+    )
+  );
+
+  // Command: pick tag from list and pin
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "gha-pin-actions.pickTagAndPin",
+      async (uri: vscode.Uri, line: number) => {
+        const doc = await vscode.workspace.openTextDocument(uri);
+        const matches = parseWorkflow(doc.getText());
+        const match = matches.find((m) => m.line === line);
+        if (!match) return;
+
+        await ensureToken();
+
+        let tags: { name: string; sha: string }[];
+        try {
+          tags = await fetchTags(match.owner, match.repo);
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          vscode.window.showWarningMessage(`Could not fetch tags: ${msg}`);
+          return;
+        }
+
+        if (tags.length === 0) {
+          vscode.window.showInformationMessage(`No tags found for ${match.nameWithOwner}.`);
+          return;
+        }
+
+        const selected = await vscode.window.showQuickPick(
+          tags.map((t) => ({
+            label: t.name,
+            description: t.sha.slice(0, 7),
+            detail: t.name === match.ref ? "$(check) current" : undefined,
+            tag: t,
+          })),
+          {
+            title: `Select version for ${match.nameWithOwner}`,
+            placeHolder: `Current: ${match.ref}`,
+            matchOnDescription: true,
+          }
+        );
+        if (!selected) return;
+
+        const newRef =
+          `${match.nameWithOwner}@${selected.tag.sha}` +
+          (shouldAddComment() ? ` # ${selected.tag.name}` : "");
+
+        const editor = vscode.window.visibleTextEditors.find(
+          (e) => e.document.uri.toString() === uri.toString()
+        );
+        const lineLength = doc.lineAt(match.line).text.length;
+        const replaceRange = new vscode.Range(match.line, match.valueStart, match.line, lineLength);
+
+        if (editor) {
+          await editor.edit((eb) => eb.replace(replaceRange, newRef));
+        } else {
+          const we = new vscode.WorkspaceEdit();
+          we.replace(uri, replaceRange, newRef);
+          await vscode.workspace.applyEdit(we);
+        }
+
+        await refreshDiagnostics(doc);
+      }
     )
   );
 

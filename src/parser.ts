@@ -35,7 +35,7 @@ export interface UsesMatch {
  * Also skips `uses: docker://` references.
  */
 const USES_RE =
-  /^(?<indent>\s+uses:\s+)(?<owner>[A-Za-z0-9_.-]+)\/(?<repo>[A-Za-z0-9_.-]+)@(?<ref>[^\s#]+)(?<comment>\s+#[^\r\n]*)?/;
+  /^(?<indent>\s+(?:-\s+)?uses:\s+)(?<owner>[A-Za-z0-9_.-]+)\/(?<repo>[A-Za-z0-9_.-]+)@(?<ref>[^\s#]+)(?<comment>\s+#[^\r\n]*)?/;
 
 export function parseWorkflow(text: string): UsesMatch[] {
   const lines = text.split(/\r?\n/);

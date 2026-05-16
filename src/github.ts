@@ -1,5 +1,7 @@
 import * as vscode from "vscode";
 
+const log = vscode.window.createOutputChannel("Pin GitHub Actions");
+
 export interface ActionRef {
   owner: string;
   repo: string;
@@ -45,7 +47,9 @@ async function ghFetch(path: string): Promise<unknown> {
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
+  log.appendLine(`→ GET https://api.github.com${path}`);
   const resp = await fetch(`https://api.github.com${path}`, { headers });
+  log.appendLine(`← ${resp.status} ${resp.statusText}`);
 
   if (resp.status === 401 || resp.status === 403) {
     clearToken();
@@ -54,7 +58,23 @@ async function ghFetch(path: string): Promise<unknown> {
   if (!resp.ok) {
     throw new Error(`GitHub API error ${resp.status} for ${path}`);
   }
-  return resp.json();
+  const body = await resp.json();
+  log.appendLine(`   ${JSON.stringify(body)}`);
+  return body;
+}
+
+// ── Tag listing ──────────────────────────────────────────────────────────────
+
+export interface TagInfo {
+  name: string;
+  sha: string;
+}
+
+export async function fetchTags(owner: string, repo: string): Promise<TagInfo[]> {
+  const data = await ghFetch(
+    `/repos/${owner}/${repo}/tags?per_page=50`
+  ) as Array<{ name: string; commit: { sha: string } }>;
+  return data.map((t) => ({ name: t.name, sha: t.commit.sha }));
 }
 
 // ── SHA resolution ────────────────────────────────────────────────────────────
@@ -80,8 +100,12 @@ export async function resolveSha(action: ActionRef): Promise<ResolvedAction> {
 
   // Already a full SHA → nothing to do
   if (isSha(ref) && ref.length === 40) {
+    log.appendLine(`${owner}/${repo}@${ref} — already pinned, skipping`);
     return { sha: ref, tagName: null };
   }
+
+  log.show(true);
+  log.appendLine(`resolving ${owner}/${repo}@${ref}`);
 
   // 1. Try tag ref first (most common case: uses: actions/checkout@v4)
   try {
@@ -97,6 +121,7 @@ export async function resolveSha(action: ActionRef): Promise<ResolvedAction> {
       sha = tagObj.object.sha;
     }
 
+    log.appendLine(`✓ ${owner}/${repo}@${ref} → ${sha} (tag)`);
     return { sha, tagName: ref };
   } catch {
     // not a tag — fall through
@@ -107,6 +132,7 @@ export async function resolveSha(action: ActionRef): Promise<ResolvedAction> {
     `/repos/${owner}/${repo}/commits/${ref}`
   ) as { sha: string };
 
+  log.appendLine(`✓ ${owner}/${repo}@${ref} → ${commitData.sha} (commit)`);
   return { sha: commitData.sha, tagName: ref };
 }
 

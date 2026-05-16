@@ -1,6 +1,7 @@
 name: "Build the extension and create a zip"
 
 on:
+  push:
   workflow_dispatch:
 
 jobs:
@@ -15,16 +16,18 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: '24'
-      
+
       - name: Install packages
-        run: |
-          npm install
-      
-      - name: Create zip package
-        run: |
-          zip -r gha-pin-actions.zip \
-            *.json \
-            *.md \
-            src \
-            node_modules \
-            .vscodeignore
+        run: npm install
+
+      - name: Install vsce
+        run: npm install -g @vscode/vsce
+
+      - name: Build vsix
+        run: vsce package --no-git-tag-version --out gha-pin-actions.vsix
+
+      - name: Upload vsix artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: gha-pin-actions
+          path: gha-pin-actions.vsix
