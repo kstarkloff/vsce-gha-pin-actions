@@ -1,0 +1,30 @@
+name: "Build the extension and create a zip"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      
+      - name: Install packages
+        run: |
+          npm install
+      
+      - name: Create zip package
+        run: |
+          zip -r gha-pin-actions.zip \
+            *.json \
+            *.md \
+            src \
+            node_modules \
+            .vscodeignore

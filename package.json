@@ -1,0 +1,61 @@
+{
+  "name": "gha-pin-actions",
+  "displayName": "Pin GitHub Actions",
+  "description": "Pins GitHub Actions to immutable commit SHAs in workflow files",
+  "version": "0.1.0",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Linters",
+    "Other"
+  ],
+  "activationEvents": [
+    "onLanguage:yaml",
+    "workspaceContains:.github/workflows/*.yml",
+    "workspaceContains:.github/workflows/*.yaml"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "gha-pin-actions.pinFile",
+        "title": "Pin Actions to SHA: Current File",
+        "icon": "$(lock)"
+      },
+      {
+        "command": "gha-pin-actions.pinAll",
+        "title": "Pin Actions to SHA: All Workflow Files"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "gha-pin-actions.pinFile",
+          "when": "resourcePath =~ /\\.github[\\\\/]workflows[\\\\/].*\\.ya?ml$/",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Pin GitHub Actions",
+      "properties": {
+        "gha-pin-actions.addVersionComment": {
+          "type": "boolean",
+          "default": true,
+          "description": "Add a comment with the version tag next to the pinned SHA (e.g. # v4)"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.41",
+    "@types/vscode": "^1.120.0",
+    "typescript": "^5.9.3"
+  }
+}
