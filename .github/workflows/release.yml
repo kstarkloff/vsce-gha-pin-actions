@@ -1,0 +1,65 @@
+name: "Release: Build and publish vsix"
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Parse version from tag
+        id: version
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+          MAJOR="${MAJOR:-0}"
+          MINOR="${MINOR:-0}"
+          PATCH="${PATCH:-0}"
+          FULL="${MAJOR}.${MINOR}.${PATCH}"
+          echo "full=${FULL}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "vsix=gha-pin-actions-v${FULL}.vsix" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: '24'
+
+      - name: Install packages
+        run: npm install
+
+      - name: Set version in package.json
+        run: npm version "${{ steps.version.outputs.full }}" --no-git-tag-version
+
+      - name: Compile TypeScript
+        run: npm run compile
+
+      - name: Install vsce
+        run: npm install -g @vscode/vsce
+
+      - name: Build vsix
+        run: vsce package --no-git-tag-version --allow-missing-repository --out "${{ steps.version.outputs.vsix }}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: "${{ steps.version.outputs.vsix }}"
+          path: "${{ steps.version.outputs.vsix }}"
+
+      - name: Publish to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VTAG="${{ steps.version.outputs.tag }}"
+          VSIX="${{ steps.version.outputs.vsix }}"
+          gh release create "$VTAG" --title "Release $VTAG" --generate-notes "$VSIX" \
+            || gh release upload "$VTAG" "$VSIX" --clobber
