@@ -13,7 +13,8 @@
   "activationEvents": [
     "onLanguage:yaml",
     "workspaceContains:.github/workflows/*.yml",
-    "workspaceContains:.github/workflows/*.yaml"
+    "workspaceContains:.github/workflows/*.yaml",
+    "workspaceContains:*/.github/workflows/*.yml"
   ],
   "main": "./out/extension.js",
   "contributes": {
